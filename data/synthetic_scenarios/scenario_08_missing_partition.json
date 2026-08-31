@@ -1,0 +1,78 @@
+{
+  "scenario_id": "08",
+  "name": "Missing Partition — Target Partition Does Not Exist",
+  "description": "The pipeline attempts to load data into a date-partitioned target table, but the partition for the current date has not been created yet. The load fails with a 'no partition found' error.",
+  "pipeline_id": "pipeline_events_partitioned_load",
+  "failure_timestamp": "2026-08-15T00:15:44Z",
+  "logs": [
+    "2026-08-15T00:00:00Z [INFO] Pipeline pipeline_events_partitioned_load started. Run ID: run_20260815_000000",
+    "2026-08-15T00:00:01Z [INFO] Configuration loaded. Source: kafka://events-cluster:9092/user-events, Target: postgres://warehouse:5432/fact_events (partitioned by event_date)",
+    "2026-08-15T00:00:02Z [INFO] [EXTRACT] Starting extraction from Kafka topic 'user-events'",
+    "2026-08-15T00:00:03Z [INFO] [EXTRACT] Consumer group: etl_events_consumer. Offset: latest committed",
+    "2026-08-15T00:00:04Z [INFO] [EXTRACT] Reading messages from partitions [0, 1, 2, 3]",
+    "2026-08-15T00:03:00Z [INFO] [EXTRACT] Extraction complete. Events consumed: 500,000",
+    "2026-08-15T00:03:01Z [INFO] [EXTRACT] Date range in extracted data: 2026-08-14 to 2026-08-15",
+    "2026-08-15T00:03:02Z [INFO] [TRANSFORM] Starting transformation stage",
+    "2026-08-15T00:03:03Z [INFO] [TRANSFORM] Applying transformation: parse_event_json",
+    "2026-08-15T00:05:00Z [INFO] [TRANSFORM] Applying transformation: extract_event_properties",
+    "2026-08-15T00:07:00Z [INFO] [TRANSFORM] Applying transformation: assign_event_categories",
+    "2026-08-15T00:08:30Z [INFO] [TRANSFORM] Transformation complete. Rows out: 500,000",
+    "2026-08-15T00:08:31Z [INFO] [LOAD] Starting load to target warehouse",
+    "2026-08-15T00:08:32Z [INFO] [LOAD] Target table: warehouse.fact_events (partitioned by event_date)",
+    "2026-08-15T00:08:33Z [INFO] [LOAD] Loading 350,000 rows for partition event_date=2026-08-14",
+    "2026-08-15T00:12:00Z [INFO] [LOAD] Partition event_date=2026-08-14: 350,000 rows loaded successfully",
+    "2026-08-15T00:12:01Z [INFO] [LOAD] Loading 150,000 rows for partition event_date=2026-08-15",
+    "2026-08-15T00:15:44Z [ERROR] [LOAD] FAILED: no partition of relation 'fact_events' found for row. Detail: Partition key (event_date) = (2026-08-15). SQLSTATE: 23514",
+    "2026-08-15T00:15:45Z [ERROR] [LOAD] Partition 'fact_events_20260815' does not exist. Available partitions: fact_events_20260801 through fact_events_20260814",
+    "2026-08-15T00:15:46Z [ERROR] [LOAD] 350,000 of 500,000 rows loaded. 150,000 rows for 2026-08-15 not loaded.",
+    "2026-08-15T00:15:47Z [INFO] Pipeline pipeline_events_partitioned_load completed with status: FAILED. Duration: 15m47s"
+  ],
+  "source_schema": {
+    "table_name": "kafka.user_events",
+    "columns": [
+      {"name": "event_id", "type": "UUID", "nullable": false, "primary_key": true},
+      {"name": "user_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "event_type", "type": "VARCHAR(50)", "nullable": false, "primary_key": false},
+      {"name": "event_date", "type": "DATE", "nullable": false, "primary_key": false},
+      {"name": "event_timestamp", "type": "TIMESTAMP", "nullable": false, "primary_key": false},
+      {"name": "event_properties", "type": "JSONB", "nullable": true, "primary_key": false},
+      {"name": "event_category", "type": "VARCHAR(30)", "nullable": true, "primary_key": false}
+    ]
+  },
+  "target_schema": {
+    "table_name": "warehouse.fact_events",
+    "columns": [
+      {"name": "event_id", "type": "UUID", "nullable": false, "primary_key": true},
+      {"name": "user_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "event_type", "type": "VARCHAR(50)", "nullable": false, "primary_key": false},
+      {"name": "event_date", "type": "DATE", "nullable": false, "primary_key": false},
+      {"name": "event_timestamp", "type": "TIMESTAMP", "nullable": false, "primary_key": false},
+      {"name": "event_properties", "type": "JSONB", "nullable": true, "primary_key": false},
+      {"name": "event_category", "type": "VARCHAR(30)", "nullable": true, "primary_key": false}
+    ],
+    "partition_key": "event_date",
+    "partition_type": "RANGE",
+    "existing_partitions": ["fact_events_20260801", "fact_events_20260802", "fact_events_20260803", "fact_events_20260804", "fact_events_20260805", "fact_events_20260806", "fact_events_20260807", "fact_events_20260808", "fact_events_20260809", "fact_events_20260810", "fact_events_20260811", "fact_events_20260812", "fact_events_20260813", "fact_events_20260814"]
+  },
+  "row_counts": {
+    "extract": 500000,
+    "transform": 500000,
+    "load": 350000
+  },
+  "expected_root_cause": "infrastructure",
+  "expected_failure_stage": "load",
+  "expected_failure_type": "missing_partition",
+  "ground_truth_rca_elements": [
+    "partition fact_events_20260815 does not exist",
+    "partition creation job did not run ahead of data arrival",
+    "150,000 rows for 2026-08-15 could not be loaded",
+    "350,000 rows for 2026-08-14 loaded successfully",
+    "SQLSTATE 23514 no partition found"
+  ],
+  "expected_remediation": [
+    "CREATE TABLE fact_events_20260815 PARTITION OF fact_events FOR VALUES FROM ('2026-08-15') TO ('2026-08-16')",
+    "Implement automatic partition creation job that runs daily before ETL pipelines",
+    "Add pre-load check: verify target partitions exist for all dates in extracted data",
+    "Consider using pg_partman for automatic partition management"
+  ]
+}

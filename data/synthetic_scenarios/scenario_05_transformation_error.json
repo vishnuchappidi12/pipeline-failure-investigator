@@ -1,0 +1,77 @@
+{
+  "scenario_id": "05",
+  "name": "Type Mismatch — VARCHAR Truncation Error",
+  "description": "Source column has VARCHAR(50) but target column only allows VARCHAR(20). During load, values longer than 20 characters cause a truncation error and the pipeline fails.",
+  "pipeline_id": "pipeline_inventory_updates",
+  "failure_timestamp": "2026-08-15T05:33:12Z",
+  "logs": [
+    "2026-08-15T05:15:00Z [INFO] Pipeline pipeline_inventory_updates started. Run ID: run_20260815_051500",
+    "2026-08-15T05:15:01Z [INFO] Configuration loaded. Source: postgres://inventory-db:5432/inventory, Target: postgres://warehouse:5432/fact_inventory",
+    "2026-08-15T05:15:02Z [INFO] [EXTRACT] Starting extraction from source database",
+    "2026-08-15T05:15:03Z [INFO] [EXTRACT] Executing query: SELECT * FROM inventory.stock_movements WHERE movement_date >= '2026-08-14'",
+    "2026-08-15T05:17:00Z [INFO] [EXTRACT] Extraction complete. Rows extracted: 75,000",
+    "2026-08-15T05:17:01Z [INFO] [TRANSFORM] Starting transformation stage",
+    "2026-08-15T05:17:02Z [INFO] [TRANSFORM] Applying transformation: calculate_net_movement",
+    "2026-08-15T05:19:00Z [INFO] [TRANSFORM] Applying transformation: map_warehouse_codes",
+    "2026-08-15T05:20:30Z [INFO] [TRANSFORM] Transformation complete. Rows out: 75,000",
+    "2026-08-15T05:20:31Z [INFO] [LOAD] Starting load to target warehouse",
+    "2026-08-15T05:20:32Z [INFO] [LOAD] Target table: warehouse.fact_inventory",
+    "2026-08-15T05:20:33Z [INFO] [LOAD] Batch size: 10,000. Total batches: 8",
+    "2026-08-15T05:21:00Z [INFO] [LOAD] Batch 1/8 loaded successfully. Rows: 10,000",
+    "2026-08-15T05:22:00Z [INFO] [LOAD] Batch 2/8 loaded successfully. Rows: 10,000",
+    "2026-08-15T05:23:00Z [INFO] [LOAD] Batch 3/8 loaded successfully. Rows: 10,000",
+    "2026-08-15T05:24:00Z [INFO] [LOAD] Batch 4/8 loaded successfully. Rows: 10,000",
+    "2026-08-15T05:25:00Z [INFO] [LOAD] Batch 5/8 loaded successfully. Rows: 10,000",
+    "2026-08-15T05:26:00Z [WARNING] [LOAD] Batch 6/8: Data truncation warning for column 'warehouse_location'",
+    "2026-08-15T05:33:12Z [ERROR] [LOAD] Batch 6/8 FAILED: value too long for type character varying(20). SQLSTATE: 22001",
+    "2026-08-15T05:33:13Z [ERROR] [LOAD] Detail: Value 'West Coast Distribution Hub #4' (31 chars) exceeds VARCHAR(20) limit for column 'warehouse_location'",
+    "2026-08-15T05:33:14Z [ERROR] [LOAD] 50,000 of 75,000 rows loaded before failure. Remaining 25,000 rows not loaded.",
+    "2026-08-15T05:33:15Z [INFO] Pipeline pipeline_inventory_updates completed with status: FAILED. Duration: 18m15s"
+  ],
+  "source_schema": {
+    "table_name": "inventory.stock_movements",
+    "columns": [
+      {"name": "movement_id", "type": "BIGINT", "nullable": false, "primary_key": true},
+      {"name": "product_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "warehouse_location", "type": "VARCHAR(50)", "nullable": false, "primary_key": false},
+      {"name": "movement_type", "type": "VARCHAR(10)", "nullable": false, "primary_key": false},
+      {"name": "quantity", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "movement_date", "type": "DATE", "nullable": false, "primary_key": false},
+      {"name": "reference_number", "type": "VARCHAR(30)", "nullable": true, "primary_key": false}
+    ]
+  },
+  "target_schema": {
+    "table_name": "warehouse.fact_inventory",
+    "columns": [
+      {"name": "movement_id", "type": "BIGINT", "nullable": false, "primary_key": true},
+      {"name": "product_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "warehouse_location", "type": "VARCHAR(20)", "nullable": false, "primary_key": false},
+      {"name": "movement_type", "type": "VARCHAR(10)", "nullable": false, "primary_key": false},
+      {"name": "quantity", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "net_movement", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "movement_date", "type": "DATE", "nullable": false, "primary_key": false},
+      {"name": "reference_number", "type": "VARCHAR(30)", "nullable": true, "primary_key": false}
+    ]
+  },
+  "row_counts": {
+    "extract": 75000,
+    "transform": 75000,
+    "load": 50000
+  },
+  "expected_root_cause": "schema_drift",
+  "expected_failure_stage": "load",
+  "expected_failure_type": "type_mismatch",
+  "ground_truth_rca_elements": [
+    "warehouse_location is VARCHAR(50) in source but VARCHAR(20) in target",
+    "value 'West Coast Distribution Hub #4' exceeds 20 character limit",
+    "SQLSTATE 22001 value too long error",
+    "load stage batch 6 failure",
+    "50,000 rows loaded before failure"
+  ],
+  "expected_remediation": [
+    "ALTER TABLE warehouse.fact_inventory ALTER COLUMN warehouse_location TYPE VARCHAR(50)",
+    "Or add a truncation/mapping transform step for warehouse_location",
+    "Add pre-load schema compatibility check for string column lengths",
+    "Implement column length validation in transform stage"
+  ]
+}

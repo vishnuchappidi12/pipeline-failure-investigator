@@ -1,0 +1,79 @@
+{
+  "scenario_id": "06",
+  "name": "Duplicate Records — Upsert Logic Failure",
+  "description": "The upsert (INSERT ON CONFLICT UPDATE) logic fails because the conflict target key was changed in the source, causing duplicate records to be inserted instead of updated. Post-load validation detects duplicate primary keys.",
+  "pipeline_id": "pipeline_customer_360_merge",
+  "failure_timestamp": "2026-08-15T06:22:45Z",
+  "logs": [
+    "2026-08-15T06:00:00Z [INFO] Pipeline pipeline_customer_360_merge started. Run ID: run_20260815_060000",
+    "2026-08-15T06:00:01Z [INFO] Configuration loaded. Source: postgres://crm-db:5432/customers, Target: postgres://warehouse:5432/dim_customer_360",
+    "2026-08-15T06:00:02Z [INFO] [EXTRACT] Starting extraction from CRM database",
+    "2026-08-15T06:00:03Z [INFO] [EXTRACT] Executing query: SELECT * FROM crm.customer_profiles WHERE last_modified >= '2026-08-14T00:00:00Z'",
+    "2026-08-15T06:02:00Z [INFO] [EXTRACT] Extraction complete. Rows extracted: 40,000",
+    "2026-08-15T06:02:01Z [INFO] [TRANSFORM] Starting transformation stage",
+    "2026-08-15T06:02:02Z [INFO] [TRANSFORM] Applying transformation: merge_contact_info",
+    "2026-08-15T06:03:00Z [INFO] [TRANSFORM] Applying transformation: compute_customer_score",
+    "2026-08-15T06:04:00Z [INFO] [TRANSFORM] Transformation complete. Rows out: 40,000",
+    "2026-08-15T06:04:01Z [INFO] [LOAD] Starting load to target warehouse",
+    "2026-08-15T06:04:02Z [INFO] [LOAD] Load mode: UPSERT (INSERT ON CONFLICT DO UPDATE)",
+    "2026-08-15T06:04:03Z [INFO] [LOAD] Conflict target: customer_email",
+    "2026-08-15T06:04:04Z [WARNING] [LOAD] Note: conflict target 'customer_email' differs from primary key 'customer_id'",
+    "2026-08-15T06:10:00Z [INFO] [LOAD] Load complete. Rows processed: 40,000. Inserts: 38,500. Updates: 1,500",
+    "2026-08-15T06:10:01Z [WARNING] [LOAD] Insert ratio unusually high: 96.25% (expected ~20% for incremental sync)",
+    "2026-08-15T06:10:02Z [INFO] [VALIDATION] Running post-load validation",
+    "2026-08-15T06:10:03Z [INFO] [VALIDATION] Checking for duplicate customer_id values",
+    "2026-08-15T06:22:45Z [ERROR] [VALIDATION] DUPLICATE CHECK FAILED: Found 12,400 duplicate customer_id values in dim_customer_360",
+    "2026-08-15T06:22:46Z [ERROR] [VALIDATION] Root cause: Upsert conflict target is 'customer_email' but some customers changed their email, creating new rows instead of updating existing ones",
+    "2026-08-15T06:22:47Z [ERROR] [VALIDATION] Example: customer_id=C-10042 appears 3 times with emails: old@example.com, new@example.com, newer@example.com",
+    "2026-08-15T06:22:48Z [ERROR] [VALIDATION] Data integrity violation: dim_customer_360 should have unique customer_id values",
+    "2026-08-15T06:22:49Z [INFO] Pipeline pipeline_customer_360_merge completed with status: FAILED. Duration: 22m49s"
+  ],
+  "source_schema": {
+    "table_name": "crm.customer_profiles",
+    "columns": [
+      {"name": "customer_id", "type": "VARCHAR(20)", "nullable": false, "primary_key": true},
+      {"name": "customer_email", "type": "VARCHAR(255)", "nullable": false, "primary_key": false},
+      {"name": "first_name", "type": "VARCHAR(100)", "nullable": false, "primary_key": false},
+      {"name": "last_name", "type": "VARCHAR(100)", "nullable": false, "primary_key": false},
+      {"name": "phone", "type": "VARCHAR(20)", "nullable": true, "primary_key": false},
+      {"name": "customer_score", "type": "DECIMAL(5,2)", "nullable": true, "primary_key": false},
+      {"name": "last_modified", "type": "TIMESTAMP", "nullable": false, "primary_key": false}
+    ]
+  },
+  "target_schema": {
+    "table_name": "warehouse.dim_customer_360",
+    "columns": [
+      {"name": "customer_id", "type": "VARCHAR(20)", "nullable": false, "primary_key": true},
+      {"name": "customer_email", "type": "VARCHAR(255)", "nullable": false, "primary_key": false},
+      {"name": "first_name", "type": "VARCHAR(100)", "nullable": false, "primary_key": false},
+      {"name": "last_name", "type": "VARCHAR(100)", "nullable": false, "primary_key": false},
+      {"name": "phone", "type": "VARCHAR(20)", "nullable": true, "primary_key": false},
+      {"name": "customer_score", "type": "DECIMAL(5,2)", "nullable": true, "primary_key": false},
+      {"name": "last_modified", "type": "TIMESTAMP", "nullable": false, "primary_key": false}
+    ]
+  },
+  "row_counts": {
+    "extract": 40000,
+    "transform": 40000,
+    "load": 40000,
+    "target_before_load": 150000,
+    "target_after_load": 188500,
+    "expected_target_after": 151500
+  },
+  "expected_root_cause": "data_quality",
+  "expected_failure_stage": "load",
+  "expected_failure_type": "duplicate_records",
+  "ground_truth_rca_elements": [
+    "upsert conflict target is customer_email instead of customer_id",
+    "customers who changed email created new rows",
+    "12,400 duplicate customer_id values",
+    "96.25% insert ratio vs expected 20%",
+    "validation stage detected duplicates post-load"
+  ],
+  "expected_remediation": [
+    "Change upsert conflict target from customer_email to customer_id (the actual primary key)",
+    "DELETE FROM dim_customer_360 WHERE ctid NOT IN (SELECT min(ctid) FROM dim_customer_360 GROUP BY customer_id) to clean duplicates",
+    "Add pre-load validation to verify conflict target matches primary key",
+    "Implement unique constraint on customer_id in target table"
+  ]
+}

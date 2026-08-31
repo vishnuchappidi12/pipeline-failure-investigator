@@ -1,0 +1,69 @@
+{
+  "scenario_id": "01",
+  "name": "Schema Drift — New Required Column",
+  "description": "Source system added a NOT NULL column 'customer_tier' that does not exist in the target table. The pipeline extracts successfully but fails at the load stage when attempting to insert rows with an unexpected column.",
+  "pipeline_id": "pipeline_customer_sync_daily",
+  "failure_timestamp": "2026-08-15T03:14:22Z",
+  "logs": [
+    "2026-08-15T03:10:00Z [INFO] Pipeline pipeline_customer_sync_daily started. Run ID: run_20260815_031000",
+    "2026-08-15T03:10:01Z [INFO] Configuration loaded. Source: postgres://source-db:5432/customers, Target: postgres://warehouse:5432/dim_customers",
+    "2026-08-15T03:10:02Z [INFO] [EXTRACT] Starting extraction from source database",
+    "2026-08-15T03:10:03Z [INFO] [EXTRACT] Executing query: SELECT * FROM public.customers WHERE updated_at >= '2026-08-14T00:00:00Z'",
+    "2026-08-15T03:10:45Z [INFO] [EXTRACT] Extraction complete. Rows extracted: 50,000",
+    "2026-08-15T03:10:46Z [INFO] [EXTRACT] Schema detected: id(INT), name(VARCHAR), email(VARCHAR), phone(VARCHAR), customer_tier(VARCHAR NOT NULL), created_at(TIMESTAMP), updated_at(TIMESTAMP)",
+    "2026-08-15T03:10:47Z [INFO] [TRANSFORM] Starting transformation stage",
+    "2026-08-15T03:10:48Z [INFO] [TRANSFORM] Applying transformation: standardize_phone_format",
+    "2026-08-15T03:11:30Z [INFO] [TRANSFORM] Applying transformation: deduplicate_by_email",
+    "2026-08-15T03:12:15Z [INFO] [TRANSFORM] Transformation complete. Rows out: 50,000",
+    "2026-08-15T03:12:16Z [INFO] [LOAD] Starting load to target warehouse",
+    "2026-08-15T03:12:17Z [INFO] [LOAD] Target table: warehouse.dim_customers",
+    "2026-08-15T03:12:18Z [WARNING] [LOAD] Column count mismatch: source has 7 columns, target has 6 columns",
+    "2026-08-15T03:12:19Z [WARNING] [LOAD] Unmapped column detected: 'customer_tier' (VARCHAR NOT NULL) not found in target schema",
+    "2026-08-15T03:14:22Z [ERROR] [LOAD] Failed to insert batch 1/50. Error: column 'customer_tier' of relation 'dim_customers' does not exist. SQLSTATE: 42703",
+    "2026-08-15T03:14:23Z [ERROR] [LOAD] Pipeline failed at LOAD stage. 0 of 50,000 rows loaded.",
+    "2026-08-15T03:14:24Z [INFO] Pipeline pipeline_customer_sync_daily completed with status: FAILED. Duration: 4m24s"
+  ],
+  "source_schema": {
+    "table_name": "public.customers",
+    "columns": [
+      {"name": "id", "type": "INTEGER", "nullable": false, "primary_key": true},
+      {"name": "name", "type": "VARCHAR(255)", "nullable": false, "primary_key": false},
+      {"name": "email", "type": "VARCHAR(255)", "nullable": false, "primary_key": false},
+      {"name": "phone", "type": "VARCHAR(20)", "nullable": true, "primary_key": false},
+      {"name": "customer_tier", "type": "VARCHAR(50)", "nullable": false, "primary_key": false},
+      {"name": "created_at", "type": "TIMESTAMP", "nullable": false, "primary_key": false},
+      {"name": "updated_at", "type": "TIMESTAMP", "nullable": false, "primary_key": false}
+    ]
+  },
+  "target_schema": {
+    "table_name": "warehouse.dim_customers",
+    "columns": [
+      {"name": "id", "type": "INTEGER", "nullable": false, "primary_key": true},
+      {"name": "name", "type": "VARCHAR(255)", "nullable": false, "primary_key": false},
+      {"name": "email", "type": "VARCHAR(255)", "nullable": false, "primary_key": false},
+      {"name": "phone", "type": "VARCHAR(20)", "nullable": true, "primary_key": false},
+      {"name": "created_at", "type": "TIMESTAMP", "nullable": false, "primary_key": false},
+      {"name": "updated_at", "type": "TIMESTAMP", "nullable": false, "primary_key": false}
+    ]
+  },
+  "row_counts": {
+    "extract": 50000,
+    "transform": 50000,
+    "load": 0
+  },
+  "expected_root_cause": "schema_drift",
+  "expected_failure_stage": "load",
+  "expected_failure_type": "schema_drift",
+  "ground_truth_rca_elements": [
+    "customer_tier column missing in target",
+    "NOT NULL constraint on new column",
+    "load stage failure",
+    "column does not exist error",
+    "source schema has 7 columns, target has 6"
+  ],
+  "expected_remediation": [
+    "Add customer_tier column to dim_customers table",
+    "ALTER TABLE warehouse.dim_customers ADD COLUMN customer_tier VARCHAR(50) NOT NULL DEFAULT 'standard'",
+    "Implement schema change detection in pipeline pre-checks"
+  ]
+}

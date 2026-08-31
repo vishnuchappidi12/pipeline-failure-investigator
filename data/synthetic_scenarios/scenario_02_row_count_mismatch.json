@@ -1,0 +1,86 @@
+{
+  "scenario_id": "02",
+  "name": "Row Count Mismatch — 30% Data Loss in Transform",
+  "description": "A transformation step with an overly aggressive deduplication filter drops 30% of records. The pipeline completes but with significant data loss that violates data quality thresholds.",
+  "pipeline_id": "pipeline_orders_etl_hourly",
+  "failure_timestamp": "2026-08-15T04:25:18Z",
+  "logs": [
+    "2026-08-15T04:00:00Z [INFO] Pipeline pipeline_orders_etl_hourly started. Run ID: run_20260815_040000",
+    "2026-08-15T04:00:01Z [INFO] Configuration loaded. Source: api://orders-service/v2/orders, Target: postgres://warehouse:5432/fact_orders",
+    "2026-08-15T04:00:02Z [INFO] [EXTRACT] Starting extraction from Orders API",
+    "2026-08-15T04:00:03Z [INFO] [EXTRACT] Fetching orders with filter: created_at >= '2026-08-15T03:00:00Z'",
+    "2026-08-15T04:02:30Z [INFO] [EXTRACT] Extraction complete. Rows extracted: 100,000",
+    "2026-08-15T04:02:31Z [INFO] [EXTRACT] Row count validation: 100,000 rows — PASSED",
+    "2026-08-15T04:02:32Z [INFO] [TRANSFORM] Starting transformation stage",
+    "2026-08-15T04:02:33Z [INFO] [TRANSFORM] Step 1/4: currency_normalization — started",
+    "2026-08-15T04:03:00Z [INFO] [TRANSFORM] Step 1/4: currency_normalization — complete. Rows: 100,000",
+    "2026-08-15T04:03:01Z [INFO] [TRANSFORM] Step 2/4: deduplicate_orders — started",
+    "2026-08-15T04:03:02Z [WARNING] [TRANSFORM] deduplicate_orders: Using composite key (customer_id, product_id, order_date) for deduplication",
+    "2026-08-15T04:05:15Z [WARNING] [TRANSFORM] deduplicate_orders: Removed 30,000 records as duplicates (30.0%)",
+    "2026-08-15T04:05:16Z [WARNING] [TRANSFORM] deduplicate_orders: Duplicate rate 30.0% exceeds expected threshold of 5.0%",
+    "2026-08-15T04:05:17Z [INFO] [TRANSFORM] Step 2/4: deduplicate_orders — complete. Rows: 70,000",
+    "2026-08-15T04:05:18Z [INFO] [TRANSFORM] Step 3/4: enrich_customer_data — started",
+    "2026-08-15T04:07:00Z [INFO] [TRANSFORM] Step 3/4: enrich_customer_data — complete. Rows: 70,000",
+    "2026-08-15T04:07:01Z [INFO] [TRANSFORM] Step 4/4: calculate_order_totals — started",
+    "2026-08-15T04:08:30Z [INFO] [TRANSFORM] Step 4/4: calculate_order_totals — complete. Rows: 70,000",
+    "2026-08-15T04:08:31Z [INFO] [TRANSFORM] Transformation complete. Rows out: 70,000 (input: 100,000, delta: -30,000)",
+    "2026-08-15T04:08:32Z [INFO] [LOAD] Starting load to target warehouse",
+    "2026-08-15T04:15:00Z [INFO] [LOAD] Load complete. Rows loaded: 70,000",
+    "2026-08-15T04:15:01Z [INFO] [VALIDATION] Running post-load validation",
+    "2026-08-15T04:15:02Z [WARNING] [VALIDATION] Row count check: Expected ~100,000, Got 70,000 (30.0% loss)",
+    "2026-08-15T04:25:18Z [ERROR] [VALIDATION] Data quality gate FAILED: Row count loss 30.0% exceeds maximum threshold of 10.0%",
+    "2026-08-15T04:25:19Z [ERROR] [VALIDATION] Pipeline marked as FAILED due to data quality violation",
+    "2026-08-15T04:25:20Z [INFO] Pipeline pipeline_orders_etl_hourly completed with status: FAILED. Duration: 25m20s"
+  ],
+  "source_schema": {
+    "table_name": "orders_api_v2",
+    "columns": [
+      {"name": "order_id", "type": "UUID", "nullable": false, "primary_key": true},
+      {"name": "customer_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "product_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "order_date", "type": "DATE", "nullable": false, "primary_key": false},
+      {"name": "quantity", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "unit_price", "type": "DECIMAL(10,2)", "nullable": false, "primary_key": false},
+      {"name": "currency", "type": "VARCHAR(3)", "nullable": false, "primary_key": false},
+      {"name": "status", "type": "VARCHAR(20)", "nullable": false, "primary_key": false}
+    ]
+  },
+  "target_schema": {
+    "table_name": "warehouse.fact_orders",
+    "columns": [
+      {"name": "order_id", "type": "UUID", "nullable": false, "primary_key": true},
+      {"name": "customer_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "product_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "order_date", "type": "DATE", "nullable": false, "primary_key": false},
+      {"name": "quantity", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "unit_price_usd", "type": "DECIMAL(10,2)", "nullable": false, "primary_key": false},
+      {"name": "total_amount_usd", "type": "DECIMAL(12,2)", "nullable": false, "primary_key": false},
+      {"name": "customer_name", "type": "VARCHAR(255)", "nullable": true, "primary_key": false},
+      {"name": "status", "type": "VARCHAR(20)", "nullable": false, "primary_key": false}
+    ]
+  },
+  "row_counts": {
+    "extract": 100000,
+    "transform_step1_currency": 100000,
+    "transform_step2_dedup": 70000,
+    "transform_step3_enrich": 70000,
+    "transform_step4_totals": 70000,
+    "load": 70000
+  },
+  "expected_root_cause": "data_quality",
+  "expected_failure_stage": "transform",
+  "expected_failure_type": "row_count_mismatch",
+  "ground_truth_rca_elements": [
+    "deduplicate_orders step removed 30% of records",
+    "composite key (customer_id, product_id, order_date) too broad",
+    "same customer ordering same product on same date is not necessarily a duplicate",
+    "transform stage step 2",
+    "30,000 records incorrectly removed"
+  ],
+  "expected_remediation": [
+    "Change deduplication key to use order_id (unique primary key) instead of composite key",
+    "Add order_id to the deduplication composite key",
+    "Lower the deduplication threshold alert from 5% to 1%",
+    "Add a pre-dedup sample check to validate duplicate detection logic"
+  ]
+}

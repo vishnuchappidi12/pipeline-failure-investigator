@@ -1,0 +1,148 @@
+{
+  "pipeline_id": "pipeline_customer_sync_daily",
+  "failure_timestamp": "2026-08-15T03:14:22Z",
+  "logs": [
+    "2026-08-15T03:10:00Z [INFO] Pipeline pipeline_customer_sync_daily started. Run ID: run_20260815_031000",
+    "2026-08-15T03:10:01Z [INFO] Configuration loaded. Source: postgres://source-db:5432/customers, Target: postgres://warehouse:5432/dim_customers",
+    "2026-08-15T03:10:02Z [INFO] [EXTRACT] Starting extraction from source database",
+    "2026-08-15T03:10:03Z [INFO] [EXTRACT] Executing query: SELECT * FROM public.customers WHERE updated_at >= '2026-08-14T00:00:00Z'",
+    "2026-08-15T03:10:45Z [INFO] [EXTRACT] Extraction complete. Rows extracted: 50,000",
+    "2026-08-15T03:10:46Z [INFO] [EXTRACT] Schema detected: id(INT), name(VARCHAR), email(VARCHAR), phone(VARCHAR), customer_tier(VARCHAR NOT NULL), created_at(TIMESTAMP), updated_at(TIMESTAMP)",
+    "2026-08-15T03:10:47Z [INFO] [TRANSFORM] Starting transformation stage",
+    "2026-08-15T03:10:48Z [INFO] [TRANSFORM] Applying transformation: standardize_phone_format",
+    "2026-08-15T03:11:30Z [INFO] [TRANSFORM] Applying transformation: deduplicate_by_email",
+    "2026-08-15T03:12:15Z [INFO] [TRANSFORM] Transformation complete. Rows out: 50,000",
+    "2026-08-15T03:12:16Z [INFO] [LOAD] Starting load to target warehouse",
+    "2026-08-15T03:12:17Z [INFO] [LOAD] Target table: warehouse.dim_customers",
+    "2026-08-15T03:12:18Z [WARNING] [LOAD] Column count mismatch: source has 7 columns, target has 6 columns",
+    "2026-08-15T03:12:19Z [WARNING] [LOAD] Unmapped column detected: 'customer_tier' (VARCHAR NOT NULL) not found in target schema",
+    "2026-08-15T03:14:22Z [ERROR] [LOAD] Failed to insert batch 1/50. Error: column 'customer_tier' of relation 'dim_customers' does not exist. SQLSTATE: 42703",
+    "2026-08-15T03:14:23Z [ERROR] [LOAD] Pipeline failed at LOAD stage. 0 of 50,000 rows loaded.",
+    "2026-08-15T03:14:24Z [INFO] Pipeline pipeline_customer_sync_daily completed with status: FAILED. Duration: 4m24s"
+  ],
+  "source_schema": {
+    "table_name": "public.customers",
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "phone",
+        "type": "VARCHAR(20)",
+        "nullable": true,
+        "primary_key": false
+      },
+      {
+        "name": "customer_tier",
+        "type": "VARCHAR(50)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary_key": false
+      }
+    ]
+  },
+  "target_schema": {
+    "table_name": "warehouse.dim_customers",
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "phone",
+        "type": "VARCHAR(20)",
+        "nullable": true,
+        "primary_key": false
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "primary_key": false
+      }
+    ]
+  },
+  "row_counts": {
+    "extract": 50000,
+    "transform": 50000,
+    "load": 0
+  },
+  "log_findings": {
+    "log_analysis": {
+      "error_message": "Failed to parse with LLM: Error code: 401 - {'error': {'message': 'Incorrect API key provided: dummy. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}",
+      "confidence": "low"
+    },
+    "parsed_summary": "Pipeline Status: FAILED\nDuration: 4m24s\nTotal log lines: 17\nErrors found: 2\nWarnings found: 2\nStages: EXTRACT, TRANSFORM, LOAD\n\nFailure Point:\n  Timestamp: 2026-08-15T03:14:22Z\n  Stage: LOAD\n  Error: Failed to insert batch 1/50. Error: column 'customer_tier' of relation 'dim_customers' does not exist. SQLSTATE: 42703\n  SQL State: 42703\n\nPreceding Warnings (2):\n  [2026-08-15T03:12:18Z] Column count mismatch: source has 7 columns, target has 6 columns\n  [2026-08-15T03:12:19Z] Unmapped column detected: 'customer_tier' (VARCHAR NOT NULL) not found in target schema",
+    "row_counts": {}
+  },
+  "rca_data": {
+    "root_cause": {
+      "primary_cause": "Failed to generate RCA: Error code: 401 - {'error': {'message': 'Incorrect API key provided: dummy. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}",
+      "category": "unknown",
+      "confidence": "low"
+    }
+  },
+  "verification_result": {
+    "passed": false,
+    "checks": {
+      "failure_point_identified": true,
+      "evidence_cited": false,
+      "remediation_actionable": false,
+      "confidence_stated": true,
+      "resolution_time_included": false
+    },
+    "missing_elements": [
+      "No evidence cited. Include specific log lines, schema diffs, or data quality metrics.",
+      "Remediation steps are missing or too generic. Include specific commands or actions.",
+      "Resolution time estimate not included."
+    ],
+    "score": 0.4
+  },
+  "rca_retries": 3
+}

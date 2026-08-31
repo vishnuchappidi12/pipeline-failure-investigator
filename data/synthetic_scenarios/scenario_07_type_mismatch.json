@@ -1,0 +1,69 @@
+{
+  "scenario_id": "07",
+  "name": "Type Mismatch — Integer vs String Casting Failure",
+  "description": "Source system changed a column from INTEGER to VARCHAR (alphanumeric IDs). The transform step tries to cast the value to INTEGER for the target, but non-numeric values cause a casting error.",
+  "pipeline_id": "pipeline_transaction_load",
+  "failure_timestamp": "2026-08-15T03:45:22Z",
+  "logs": [
+    "2026-08-15T03:30:00Z [INFO] Pipeline pipeline_transaction_load started. Run ID: run_20260815_033000",
+    "2026-08-15T03:30:01Z [INFO] Configuration loaded. Source: postgres://payments-db:5432/transactions, Target: postgres://warehouse:5432/fact_transactions",
+    "2026-08-15T03:30:02Z [INFO] [EXTRACT] Starting extraction from payments database",
+    "2026-08-15T03:30:03Z [INFO] [EXTRACT] Executing query: SELECT * FROM payments.transactions WHERE created_at >= '2026-08-14T00:00:00Z'",
+    "2026-08-15T03:32:00Z [INFO] [EXTRACT] Extraction complete. Rows extracted: 200,000",
+    "2026-08-15T03:32:01Z [INFO] [EXTRACT] Column 'merchant_id' type detected as VARCHAR(20) (was INTEGER in previous runs)",
+    "2026-08-15T03:32:02Z [WARNING] [EXTRACT] Schema change detected: merchant_id type changed from INTEGER to VARCHAR(20)",
+    "2026-08-15T03:32:03Z [INFO] [TRANSFORM] Starting transformation stage",
+    "2026-08-15T03:32:04Z [INFO] [TRANSFORM] Step 1/3: cast_column_types — started",
+    "2026-08-15T03:32:05Z [INFO] [TRANSFORM] Casting merchant_id from VARCHAR to INTEGER for target compatibility",
+    "2026-08-15T03:33:00Z [WARNING] [TRANSFORM] cast_column_types: 15,000 rows have non-numeric merchant_id values (e.g., 'MCH-A1B2C3')",
+    "2026-08-15T03:45:22Z [ERROR] [TRANSFORM] Step 1/3: cast_column_types FAILED: invalid literal for int() with base 10: 'MCH-A1B2C3'",
+    "2026-08-15T03:45:23Z [ERROR] [TRANSFORM] Failed to cast merchant_id value 'MCH-A1B2C3' to INTEGER. 15,000 rows affected.",
+    "2026-08-15T03:45:24Z [ERROR] [TRANSFORM] Pipeline failed at TRANSFORM stage. 0 rows loaded.",
+    "2026-08-15T03:45:25Z [INFO] Pipeline pipeline_transaction_load completed with status: FAILED. Duration: 15m25s"
+  ],
+  "source_schema": {
+    "table_name": "payments.transactions",
+    "columns": [
+      {"name": "transaction_id", "type": "BIGINT", "nullable": false, "primary_key": true},
+      {"name": "merchant_id", "type": "VARCHAR(20)", "nullable": false, "primary_key": false},
+      {"name": "customer_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "amount", "type": "DECIMAL(12,2)", "nullable": false, "primary_key": false},
+      {"name": "currency", "type": "VARCHAR(3)", "nullable": false, "primary_key": false},
+      {"name": "status", "type": "VARCHAR(20)", "nullable": false, "primary_key": false},
+      {"name": "created_at", "type": "TIMESTAMP", "nullable": false, "primary_key": false}
+    ]
+  },
+  "target_schema": {
+    "table_name": "warehouse.fact_transactions",
+    "columns": [
+      {"name": "transaction_id", "type": "BIGINT", "nullable": false, "primary_key": true},
+      {"name": "merchant_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "customer_id", "type": "INTEGER", "nullable": false, "primary_key": false},
+      {"name": "amount", "type": "DECIMAL(12,2)", "nullable": false, "primary_key": false},
+      {"name": "currency", "type": "VARCHAR(3)", "nullable": false, "primary_key": false},
+      {"name": "status", "type": "VARCHAR(20)", "nullable": false, "primary_key": false},
+      {"name": "created_at", "type": "TIMESTAMP", "nullable": false, "primary_key": false}
+    ]
+  },
+  "row_counts": {
+    "extract": 200000,
+    "transform": 0,
+    "load": 0
+  },
+  "expected_root_cause": "schema_drift",
+  "expected_failure_stage": "transform",
+  "expected_failure_type": "type_mismatch",
+  "ground_truth_rca_elements": [
+    "merchant_id changed from INTEGER to VARCHAR(20) in source",
+    "target still expects INTEGER for merchant_id",
+    "non-numeric values like 'MCH-A1B2C3' cannot be cast to int",
+    "15,000 rows with alphanumeric merchant_id values",
+    "transform stage step 1 cast_column_types failed"
+  ],
+  "expected_remediation": [
+    "ALTER TABLE warehouse.fact_transactions ALTER COLUMN merchant_id TYPE VARCHAR(20)",
+    "Update transform logic to handle new alphanumeric merchant_id format",
+    "Add schema drift detection in extract stage to alert on type changes",
+    "Create a merchant_id mapping table for backward compatibility"
+  ]
+}
